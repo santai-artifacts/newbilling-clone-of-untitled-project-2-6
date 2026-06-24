@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scout · Job Scraping Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0c12;
+    --bg-elev: #11141d;
+    --surface: #161a26;
+    --surface-2: #1c2130;
+    --border: #232838;
+    --border-soft: #1b2030;
+    --text: #e8ecf4;
+    --text-dim: #9aa3b8;
+    --text-faint: #626c84;
+    --accent: #6d8bff;
+    --accent-2: #8b6dff;
+    --green: #3ddc97;
+    --amber: #ffce54;
+    --red: #ff6b7d;
+    --cyan: #4fd6e0;
+    --radius: 14px;
+    --radius-sm: 10px;
+    --shadow: 0 8px 30px rgba(0,0,0,.35);
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background:
+      radial-gradient(1100px 600px at 100% -10%, rgba(109,139,255,.10), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(139,109,255,.08), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+
+  .app { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    background: linear-gradient(180deg, var(--bg-elev), #0d101a);
+    border-right: 1px solid var(--border);
+    padding: 22px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 22px; }
+  .logo {
+    width: 36px; height: 36px; border-radius: 10px; flex: none;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center;
+    box-shadow: 0 4px 16px rgba(109,139,255,.4);
+  }
+  .logo svg { width: 20px; height: 20px; }
+  .brand h1 { font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+  .brand span { font-size: 11px; color: var(--text-faint); display: block; font-weight: 500; }
+
+  .nav-label { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--text-faint); padding: 14px 10px 6px; font-weight: 600; }
+  .nav-item {
+    display: flex; align-items: center; gap: 11px;
+    padding: 9px 11px; border-radius: var(--radius-sm);
+    color: var(--text-dim); font-size: 13.5px; font-weight: 500;
+    cursor: pointer; border: 1px solid transparent;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .nav-item svg { width: 17px; height: 17px; flex: none; opacity: .9; }
+  .nav-item:hover { background: var(--surface); color: var(--text); }
+  .nav-item.active { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+  .nav-item .badge { margin-left: auto; font-size: 10.5px; background: var(--accent); color: #0a0c12; padding: 1px 7px; border-radius: 20px; font-weight: 700; }
+
+  .agent-card {
+    margin-top: auto; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 13px;
+  }
+  .agent-card .row { display: flex; align-items: center; gap: 9px; }
+  .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--green); position: relative; flex: none; }
+  .pulse::after { content:''; position:absolute; inset:-4px; border-radius:50%; background: var(--green); opacity:.35; animation: pulse 1.8s ease-out infinite; }
+  @keyframes pulse { 0%{transform:scale(.6);opacity:.5} 100%{transform:scale(2.2);opacity:0} }
+  .agent-card .name { font-size: 13px; font-weight: 600; }
+  .agent-card .meta { font-size: 11px; color: var(--text-faint); margin-top: 8px; font-family: var(--mono); }
+
+  /* ---------- Main ---------- */
+  .main { padding: 26px 30px 60px; max-width: 1500px; }
+  .topbar { display: flex; align-items: center; gap: 16px; margin-bottom: 26px; flex-wrap: wrap; }
+  .topbar h2 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+  .topbar .sub { font-size: 13px; color: var(--text-dim); }
+  .topbar-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+  .btn {
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    padding: 9px 15px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: transform .1s, background .15s, border-color .15s, box-shadow .15s;
+  }
+  .btn:hover { background: var(--surface-2); border-color: #2e3550; }
+  .btn:active { transform: scale(.97); }
+  .btn svg { width: 15px; height: 15px; }
+  .btn.primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border-color: transparent; color: #0a0c12; font-weight: 700;
+    box-shadow: 0 4px 16px rgba(109,139,255,.35);
+  }
+  .btn.primary:hover { box-shadow: 0 6px 22px rgba(109,139,255,.5); }
+  .btn.ghost { background: transparent; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* Stat cards */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px; position: relative; overflow: hidden;
+    transition: transform .15s, border-color .15s;
+  }
+  .stat:hover { transform: translateY(-2px); border-color: #2e3550; }
+  .stat .ico { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; margin-bottom: 14px; }
+  .stat .ico svg { width: 18px; height: 18px; }
+  .stat .label { font-size: 12px; color: var(--text-dim); font-weight: 500; }
+  .stat .value { font-size: 28px; font-weight: 800; letter-spacing: -.03em; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .stat .delta { font-size: 11.5px; margin-top: 7px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+  .delta.up { color: var(--green); }
+  .delta.down { color: var(--red); }
+  .delta.flat { color: var(--text-faint); }
+
+  /* Layout grid */
+  .grid { display: grid; grid-template-columns: 1.55fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .panel-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--border-soft); }
+  .panel-head h3 { font-size: 14.5px; font-weight: 600; }
+  .panel-head .hint { font-size: 11.5px; color: var(--text-faint); margin-left: auto; }
+  .panel-body { padding: 18px; }
+
+  /* Chart */
+  .chart-wrap { padding: 8px 18px 18px; }
+  svg.chart { width: 100%; height: 200px; display: block; }
+  .chart-legend { display: flex; gap: 18px; padding: 0 18px 14px; font-size: 11.5px; color: var(--text-dim); }
+  .chart-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+
+  /* Activity feed */
+  .feed { max-height: 340px; overflow-y: auto; }
+  .feed-item { display: flex; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--border-soft); font-size: 12.5px; animation: slideIn .35s ease; }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+  .feed-item:last-child { border-bottom: none; }
+  .feed-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex: none; }
+  .feed-item .ftxt { color: var(--text-dim); }
+  .feed-item .ftxt b { color: var(--text); font-weight: 600; }
+  .feed-item time { color: var(--text-faint); font-family: var(--mono); font-size: 10.5px; margin-left: auto; white-space: nowrap; padding-left: 10px; }
+
+  /* Sources */
+  .source { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border-soft); }
+  .source:last-child { border-bottom: none; }
+  .source .savatar { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-weight: 700; font-size: 13px; color: #0a0c12; flex: none; }
+  .source .sname { font-size: 13.5px; font-weight: 600; }
+  .source .scount { font-size: 11.5px; color: var(--text-faint); font-family: var(--mono); }
+  .source .sstatus { margin-left: auto; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; }
+  .ss-ok { background: rgba(61,220,151,.13); color: var(--green); }
+  .ss-warn { background: rgba(255,206,84,.13); color: var(--amber); }
+  .ss-err { background: rgba(255,107,125,.13); color: var(--red); }
+
+  /* Table */
+  .toolbar { display: flex; gap: 10px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border-soft); flex-wrap: wrap; }
+  .search { position: relative; flex: 1; min-width: 200px; }
+  .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--text-faint); }
+  .search input {
+    width: 100%; padding: 9px 12px 9px 36px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--bg-elev); color: var(--text);
+    font-family: inherit; font-size: 13px; outline: none; transition: border-color .15s;
+  }
+  .search input:focus { border-color: var(--accent); }
+  .search input::placeholder { color: var(--text-faint); }
+  .chips { display: flex; gap: 7px; }
+  .chip {
+    font-size: 12px; font-weight: 500; padding: 7px 13px; border-radius: 20px;
+    border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-dim);
+    cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .chip:hover { color: var(--text); border-color: #2e3550; }
+  .chip.active { background: var(--accent); border-color: transparent; color: #0a0c12; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--text-faint); font-weight: 600; padding: 12px 18px; border-bottom: 1px solid var(--border-soft);
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  thead th:hover { color: var(--text-dim); }
+  thead th .arrow { opacity: .5; font-size: 9px; }
+  tbody td { padding: 14px 18px; border-bottom: 1px solid var(--border-soft); font-size: 13px; vertical-align: middle; }
+  tbody tr { transition: background .12s; }
+  tbody tr:hover { background: var(--surface-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  .job-title { font-weight: 600; color: var(--text); }
+  .job-co { display: flex; align-items: center; gap: 9px; }
+  .co-logo { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #0a0c12; flex: none; }
+  .muted { color: var(--text-dim); }
+  .tag { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 6px; background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); }
+  .salary { font-family: var(--mono); font-size: 12.5px; color: var(--green); font-weight: 500; }
+  .pill { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; }
+  .pill.new { background: rgba(109,139,255,.16); color: var(--accent); }
+  .pill.seen { background: var(--surface-2); color: var(--text-faint); }
+  .pill.flag { background: rgba(255,206,84,.14); color: var(--amber); }
+  .ago { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); }
+  .empty { text-align: center; padding: 50px 20px; color: var(--text-faint); }
+  .empty svg { width: 40px; height: 40px; margin-bottom: 12px; opacity: .5; }
+
+  .table-foot { display: flex; align-items: center; padding: 13px 18px; font-size: 12px; color: var(--text-faint); }
+  .table-foot .right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+
+  /* Run banner */
+  .run-banner {
+    display: none; align-items: center; gap: 13px; padding: 12px 16px; margin-bottom: 18px;
+    background: linear-gradient(90deg, rgba(109,139,255,.12), rgba(139,109,255,.06));
+    border: 1px solid rgba(109,139,255,.3); border-radius: var(--radius); font-size: 13px;
+  }
+  .run-banner.show { display: flex; }
+  .run-banner .spin { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.2); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .progbar { flex: 1; height: 5px; background: var(--bg-elev); border-radius: 4px; overflow: hidden; max-width: 320px; }
+  .progbar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 4px; transition: width .3s; }
+
+  .scrollbar::-webkit-scrollbar, .feed::-webkit-scrollbar { width: 8px; }
+  .scrollbar::-webkit-scrollbar-thumb, .feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+
+  /* Responsive */
+  @media (max-width: 1080px) {
+    .grid { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 18px 16px 50px; }
+    .stats { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .col-hide { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0a0c12" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      </div>
+      <div>
+        <h1>Scout</h1>
+        <span>Job Scraper Agent</span>
+      </div>
+    </div>
+
+    <div class="nav-label">Monitor</div>
+    <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> Overview</div>
+    <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg> Postings <span class="badge" id="navCount">0</span></div>
+    <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><path d="M21 3v6h-6"/></svg> Run History</div>
+    <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M3 12h6M15 12h6M12 3v6M12 15v6"/></svg> Sources</div>
+
+    <div class="nav-label">Configure</div>
+    <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg> Filters &amp; Rules</div>
+    <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3z"/><path d="M8 21a4 4 0 0 0 8 0"/></svg> Alerts</div>
+
+    <div class="agent-card">
+      <div class="row"><span class="pulse" id="agentPulse"></span><span class="name" id="agentState">Active</span></div>
+      <div class="meta">cron: every 30m<br>last run <span id="lastRunAgo">2m ago</span></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main scrollbar">
+    <div class="topbar">
+      <div>
+        <h2>Overview</h2>
+        <div class="sub">Monitoring <b id="srcCount">6</b> job boards · <span id="todayCount">0</span> new postings today</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn ghost" id="pauseBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          Pause
+        </button>
+        <button class="btn primary" id="runBtn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Run scrape now
+        </button>
+      </div>
+    </div>
+
+    <!-- Run banner -->
+    <div class="run-banner" id="runBanner">
+      <div class="spin"></div>
+      <span id="runMsg">Initializing crawler…</span>
+      <div class="progbar"><i id="prog"></i></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats" id="stats"></div>
+
+    <!-- Chart + Sources -->
+    <div class="grid">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Postings scraped</h3>
+          <span class="hint">last 14 days</span>
+        </div>
+        <div class="chart-legend">
+          <span><i style="background:var(--accent)"></i>Total found</span>
+          <span><i style="background:var(--green)"></i>New &amp; unique</span>
+        </div>
+        <div class="chart-wrap"><svg class="chart" id="chart" viewBox="0 0 720 200" preserveAspectRatio="none"></svg></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Source health</h3><span class="hint">live</span></div>
+        <div class="panel-body" id="sources" style="padding-top:4px;padding-bottom:6px;"></div>
+      </div>
+    </div>
+
+    <!-- Activity feed -->
+    <div class="grid" style="grid-template-columns: 1fr;">
+      <div class="panel">
+        <div class="panel-head"><h3>Activity log</h3><span class="hint" id="feedHint">streaming</span></div>
+        <div class="feed scrollbar" id="feed"></div>
+      </div>
+    </div>
+
+    <!-- Postings table -->
+    <div class="panel">
+      <div class="panel-head"><h3>Scraped postings</h3><span class="hint" id="resultCount"></span></div>
+      <div class="toolbar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="searchInput" placeholder="Search title, company, location…" />
+        </div>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th data-sort="title">Role <span class="arrow"></span></th>
+              <th data-sort="company">Company <span class="arrow"></span></th>
+              <th class="col-hide" data-sort="location">Location <span class="arrow"></span></th>
+              <th class="col-hide" data-sort="salary">Salary <span class="arrow"></span></th>
+              <th data-sort="source">Source <span class="arrow"></span></th>
+              <th data-sort="found">Found <span class="arrow"></span></th>
+              <th data-sort="status">Status <span class="arrow"></span></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="table-foot">
+        <span id="footInfo"></span>
+        <span class="right">Auto-refresh <b style="color:var(--green)">on</b></span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// MOCK DATA — no backend; everything runs in-memory for the session.
+// ---------------------------------------------------------------------------
+const COLORS = ['#6d8bff','#8b6dff','#3ddc97','#4fd6e0','#ffce54','#ff6b7d','#f78fb3','#5ad1a0'];
+const colorFor = (s) => COLORS[[...s].reduce((a,c)=>a+c.charCodeAt(0),0) % COLORS.length];
+const initials = (s) => s.split(/[\s.]+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+
+const SOURCES = [
+  { name: 'LinkedIn',   count: 1284, status: 'ok',   note: '198 today' },
+  { name: 'Indeed',     count: 967,  status: 'ok',   note: '142 today' },
+  { name: 'Greenhouse', count: 612,  status: 'ok',   note: '88 today' },
+  { name: 'Lever',      count: 433,  status: 'warn', note: 'rate-limited' },
+  { name: 'WeWorkRemotely', count: 221, status: 'ok', note: '31 today' },
+  { name: 'AngelList',  count: 156,  status: 'err',  note: 'auth failed' },
+];
+
+const TITLES = ['Senior Frontend Engineer','Staff Software Engineer','Product Designer','Data Scientist','DevOps Engineer','Engineering Manager','Backend Engineer (Go)','ML Research Engineer','Full-Stack Developer','Platform Engineer','iOS Engineer','Growth Marketer','Technical Writer','Site Reliability Engineer','Security Engineer','Solutions Architect','Product Manager','Android Engineer','Data Engineer','UX Researcher'];
+const COMPANIES = ['Stripe','Notion','Figma','Linear','Vercel','Ramp','Datadog','Airbnb','Cloudflare','Retool','Plaid','Anduril','Scale AI','Brex','Mercury','Rippling','Webflow','Census','Modal','Replit'];
+const LOCATIONS = ['Remote (US)','San Francisco, CA','New York, NY','Remote (EU)','Austin, TX','Seattle, WA','London, UK','Remote (Global)','Boston, MA','Toronto, CA'];
+const TYPES = ['Full-time','Contract','Full-time','Full-time','Part-time'];
+
+let seed = 42;
+const rand = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+
+function makeJob(i) {
+  const minK = 90 + Math.floor(rand() * 12) * 10;
+  const maxK = minK + 30 + Math.floor(rand() * 10) * 10;
+  const minsAgo = Math.floor(rand() * 2880); // up to 2 days
+  const r = rand();
+  const status = r > 0.78 ? 'new' : (r > 0.68 ? 'flag' : 'seen');
+  return {
+    id: i,
+    title: pick(TITLES),
+    company: pick(COMPANIES),
+    location: pick(LOCATIONS),
+    type: pick(TYPES),
+    salary: rand() > 0.18 ? `$${minK}k–$${maxK}k` : null,
+    source: pick(SOURCES.map(s=>s.name)),
+    minsAgo,
+    status, // new | seen | flag
+  };
+}
+
+let JOBS = Array.from({length: 48}, (_, i) => makeJob(i)).sort((a,b)=>a.minsAgo-b.minsAgo);
+let nextId = JOBS.length;
+
+// 14-day chart series
+const SERIES = (() => {
+  const total = [], unique = [];
+  for (let i = 0; i < 14; i++) {
+    const base = 220 + Math.round(Math.sin(i/2)*70) + Math.floor(rand()*120);
+    total.push(base);
+    unique.push(Math.round(base * (0.32 + rand()*0.18)));
+  }
+  return { total, unique };
+})();
+
+// ---------------------------------------------------------------------------
+// RENDER HELPERS
+// ---------------------------------------------------------------------------
+const $ = (s) => document.querySelector(s);
+const fmt = (n) => n.toLocaleString('en-US');
+
+function agoText(mins) {
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const h = Math.floor(mins/60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h/24) + 'd ago';
+}
+
+// ---- Stats ----
+function renderStats() {
+  const totalScraped = SOURCES.reduce((a,s)=>a+s.count,0);
+  const newToday = JOBS.filter(j=>j.minsAgo < 1440).length + 461;
+  const matches = JOBS.filter(j=>j.status==='new'||j.status==='flag').length + 73;
+  const stats = [
+    { label:'Total postings indexed', value: fmt(totalScraped), delta:'+12.4%', dir:'up', tone:'var(--accent)',
+      ico:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>' },
+    { label:'New today', value: fmt(newToday), delta:'+38 vs avg', dir:'up', tone:'var(--green)',
+      ico:'<path d="M12 2v20M2 12h20"/>' },
+    { label:'Matched filters', value: fmt(matches), delta:'+5 unseen', dir:'up', tone:'var(--accent-2)',
+      ico:'<polyline points="20 6 9 17 4 12"/>' },
+    { label:'Scrape success rate', value: '96.2%', delta:'1 source down', dir:'down', tone:'var(--amber)',
+      ico:'<path d="M22 12A10 10 0 1 1 12 2"/><polyline points="22 4 12 14.01 9 11.01"/>' },
+  ];
+  $('#stats').innerHTML = stats.map(s => `
+    <div class="stat">
+      <div class="ico" style="background:${s.tone}1f;color:${s.tone}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${s.ico}</svg>
+      </div>
+      <div class="label">${s.label}</div>
+      <div class="value">${s.value}</div>
+      <div class="delta ${s.dir}">
+        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          ${s.dir==='up'?'<polyline points="6 15 12 9 18 15"/>':s.dir==='down'?'<polyline points="6 9 12 15 18 9"/>':'<line x1="5" y1="12" x2="19" y2="12"/>'}
+        </svg>${s.delta}
+      </div>
+    </div>`).join('');
+}
+
+// ---- Sources ----
+function renderSources() {
+  const map = { ok:['ss-ok','Healthy'], warn:['ss-warn','Throttled'], err:['ss-err','Error'] };
+  $('#sources').innerHTML = SOURCES.map(s => {
+    const [cls, txt] = map[s.status];
+    return `<div class="source">
+      <div class="savatar" style="background:${colorFor(s.name)}">${initials(s.name)}</div>
+      <div>
+        <div class="sname">${s.name}</div>
+        <div class="scount">${fmt(s.count)} indexed · ${s.note}</div>
+      </div>
+      <span class="sstatus ${cls}">${txt}</span>
+    </div>`;
+  }).join('');
+  $('#srcCount').textContent = SOURCES.length;
+}
+
+// ---- Chart ----
+function renderChart() {
+  const W=720, H=200, pad=8;
+  const all = [...SERIES.total, ...SERIES.unique];
+  const max = Math.max(...all) * 1.15;
+  const n = SERIES.total.length;
+  const x = (i) => pad + i * (W - pad*2) / (n - 1);
+  const y = (v) => H - pad - (v / max) * (H - pad*2 - 14);
+
+  const linePath = (arr) => arr.map((v,i)=>`${i?'L':'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  const areaPath = (arr) => `${linePath(arr)} L${x(n-1)} ${H-pad} L${x(0)} ${H-pad} Z`;
+
+  $('#chart').innerHTML = `
+    <defs>
+      <linearGradient id="gTotal" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#6d8bff" stop-opacity=".35"/>
+        <stop offset="100%" stop-color="#6d8bff" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    ${[0.25,0.5,0.75].map(f=>`<line x1="${pad}" x2="${W-pad}" y1="${pad+ (H-pad*2-14)*f}" y2="${pad+(H-pad*2-14)*f}" stroke="#232838" stroke-width="1" stroke-dasharray="3 5"/>`).join('')}
+    <path d="${areaPath(SERIES.total)}" fill="url(#gTotal)"/>
+    <path d="${linePath(SERIES.total)}" fill="none" stroke="#6d8bff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="${linePath(SERIES.unique)}" fill="none" stroke="#3ddc97" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="0"/>
+    ${SERIES.total.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="${i===n-1?4:0}" fill="#6d8bff" stroke="#0a0c12" stroke-width="2"/>`).join('')}
+    ${SERIES.unique.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="${i===n-1?4:0}" fill="#3ddc97" stroke="#0a0c12" stroke-width="2"/>`).join('')}
+  `;
+}
+
+// ---- Activity feed ----
+const FEED_TEMPLATES = [
+  { dot:'var(--green)', tpl:()=>`Found <b>${pick(TITLES)}</b> at <b>${pick(COMPANIES)}</b> via ${pick(SOURCES.map(s=>s.name))}` },
+  { dot:'var(--accent)', tpl:()=>`Scraped <b>${20+Math.floor(rand()*60)}</b> new postings from <b>${pick(SOURCES.map(s=>s.name))}</b>` },
+  { dot:'var(--amber)', tpl:()=>`Deduplicated <b>${3+Math.floor(rand()*9)}</b> repeat listings` },
+  { dot:'var(--cyan)', tpl:()=>`Matched filter "<b>remote · $120k+</b>" — ${1+Math.floor(rand()*5)} hits` },
+  { dot:'var(--red)', tpl:()=>`<b>${pick(['Lever','AngelList'])}</b> returned 429 — backing off 60s` },
+  { dot:'var(--green)', tpl:()=>`Enriched salary data for <b>${pick(COMPANIES)}</b> posting` },
+];
+let feedItems = [];
+function seedFeed() {
+  for (let i = 0; i < 8; i++) pushFeed(2 + i*3 + Math.floor(rand()*4), false);
+  renderFeed();
+}
+function pushFeed(minsAgo, prepend=true) {
+  const t = pick(FEED_TEMPLATES);
+  const item = { dot:t.dot, html:t.tpl(), minsAgo };
+  if (prepend) feedItems.unshift(item); else feedItems.push(item);
+  if (feedItems.length > 40) feedItems.pop();
+}
+function renderFeed() {
+  $('#feed').innerHTML = feedItems.map(f=>`
+    <div class="feed-item">
+      <span class="feed-dot" style="background:${f.dot}"></span>
+      <span class="ftxt">${f.html}</span>
+      <time>${agoText(f.minsAgo)}</time>
+    </div>`).join('');
+}
+
+// ---- Table ----
+let activeFilter = 'all';
+let sortKey = 'found', sortDir = 1; // found asc = most recent first
+let searchTerm = '';
+
+function renderChips() {
+  const filters = [
+    { k:'all', label:'All' },
+    { k:'new', label:'New' },
+    { k:'flag', label:'Flagged' },
+    { k:'remote', label:'Remote' },
+    { k:'fulltime', label:'Full-time' },
+  ];
+  $('#chips').innerHTML = filters.map(f=>`<button class="chip ${activeFilter===f.k?'active':''}" data-filter="${f.k}">${f.label}</button>`).join('');
+}
+
+function filteredJobs() {
+  let rows = JOBS.filter(j => {
+    if (activeFilter==='new' && j.status!=='new') return false;
+    if (activeFilter==='flag' && j.status!=='flag') return false;
+    if (activeFilter==='remote' && !j.location.toLowerCase().includes('remote')) return false;
+    if (activeFilter==='fulltime' && j.type!=='Full-time') return false;
+    if (searchTerm) {
+      const hay = `${j.title} ${j.company} ${j.location} ${j.source}`.toLowerCase();
+      if (!hay.includes(searchTerm)) return false;
+    }
+    return true;
+  });
+  const get = (j) => {
+    switch(sortKey){
+      case 'found': return j.minsAgo;
+      case 'salary': return j.salary ? parseInt(j.salary.replace(/\D/g,'')) : -1;
+      default: return (j[sortKey]||'').toString().toLowerCase();
+    }
+  };
+  rows.sort((a,b)=>{ const x=get(a),y=get(b); return (x<y?-1:x>y?1:0)*sortDir; });
+  return rows;
+}
+
+function renderTable() {
+  const rows = filteredJobs();
+  const tbody = $('#tbody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <div>No postings match your filters.</div></div></td></tr>`;
+  } else {
+    const statusPill = { new:['pill new','New'], seen:['pill seen','Seen'], flag:['pill flag','Flagged'] };
+    tbody.innerHTML = rows.map(j=>{
+      const [pc,pt] = statusPill[j.status];
+      return `<tr>
+        <td><div class="job-title">${j.title}</div><div class="muted" style="font-size:11.5px">${j.type}</div></td>
+        <td><div class="job-co"><span class="co-logo" style="background:${colorFor(j.company)}">${initials(j.company)}</span>${j.company}</div></td>
+        <td class="col-hide muted">${j.location}</td>
+        <td class="col-hide">${j.salary ? `<span class="salary">${j.salary}</span>` : '<span class="muted">—</span>'}</td>
+        <td><span class="tag">${j.source}</span></td>
+        <td><span class="ago">${agoText(j.minsAgo)}</span></td>
+        <td><span class="${pc}">${pt}</span></td>
+      </tr>`;
+    }).join('');
+  }
+  $('#resultCount').textContent = `${rows.length} shown`;
+  $('#footInfo').textContent = `Showing ${rows.length} of ${JOBS.length} scraped postings`;
+  $('#navCount').textContent = JOBS.length;
+  $('#todayCount').textContent = JOBS.filter(j=>j.minsAgo<1440).length;
+}
+
+// ---------------------------------------------------------------------------
+// INTERACTIONS
+// ---------------------------------------------------------------------------
+$('#chips').addEventListener('click', (e)=>{
+  const b = e.target.closest('.chip'); if(!b) return;
+  activeFilter = b.dataset.filter; renderChips(); renderTable();
+});
+$('#searchInput').addEventListener('input', (e)=>{ searchTerm = e.target.value.trim().toLowerCase(); renderTable(); });
+document.querySelectorAll('thead th[data-sort]').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const k = th.dataset.sort;
+    if (sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=1; }
+    document.querySelectorAll('thead th .arrow').forEach(a=>a.textContent='');
+    th.querySelector('.arrow').textContent = sortDir>0?'▲':'▼';
+    renderTable();
+  });
+});
+
+// Pause / resume
+let paused = false;
+$('#pauseBtn').addEventListener('click', ()=>{
+  paused = !paused;
+  $('#pauseBtn').innerHTML = paused
+    ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Resume'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause';
+  $('#agentState').textContent = paused ? 'Paused' : 'Active';
+  $('#agentPulse').style.background = paused ? 'var(--amber)' : 'var(--green)';
+  $('#feedHint').textContent = paused ? 'paused' : 'streaming';
+});
+
+// Run scrape now — simulated crawl
+let running = false;
+const RUN_STEPS = [
+  'Resolving 6 source endpoints…','Fetching LinkedIn results (page 1–8)…','Parsing Indeed job cards…',
+  'Querying Greenhouse boards…','Deduplicating against index…','Enriching salary & location data…','Applying filter rules…','Finalizing run…'
+];
+$('#runBtn').addEventListener('click', ()=>{
+  if (running) return;
+  running = true;
+  const btn = $('#runBtn'); btn.disabled = true;
+  const banner = $('#runBanner'); banner.classList.add('show');
+  let step = 0;
+  const tick = () => {
+    if (step < RUN_STEPS.length) {
+      $('#runMsg').textContent = RUN_STEPS[step];
+      $('#prog').style.width = Math.round((step+1)/RUN_STEPS.length*100) + '%';
+      // add a couple fresh jobs mid-run
+      if (step===2 || step===5) {
+        const j = makeJob(nextId++); j.minsAgo = 0; j.status='new';
+        JOBS.unshift(j);
+        pushFeed(0); renderFeed(); renderTable();
+      }
+      step++; setTimeout(tick, 520);
+    } else {
+      banner.classList.remove('show');
+      btn.disabled = false; running = false;
+      $('#lastRunAgo').textContent = 'just now';
+      const found = 18 + Math.floor(rand()*40);
+      feedItems.unshift({dot:'var(--green)', html:`✓ Run complete — <b>${found}</b> postings scraped, <b>${4+Math.floor(rand()*8)}</b> new matches`, minsAgo:0});
+      renderFeed();
+    }
+  };
+  tick();
+});
+
+// Live ticking: age everything, occasionally add a feed event + new job
+function liveTick() {
+  if (!paused) {
+    JOBS.forEach(j=>j.minsAgo += 1);
+    feedItems.forEach(f=>f.minsAgo += 1);
+    if (rand() > 0.55) { pushFeed(0); if (feedItems.length) renderFeed(); }
+    if (rand() > 0.8) {
+      const j = makeJob(nextId++); j.minsAgo = 0;
+      JOBS.unshift(j); renderTable();
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// INIT
+// ---------------------------------------------------------------------------
+renderStats();
+renderSources();
+renderChart();
+renderChips();
+seedFeed();
+renderTable();
+setInterval(liveTick, 6000);
+
+// Nav highlighting (cosmetic — single page)
+document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',()=>{
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  n.classList.add('active');
+}));
+</script>
+</body>
+</html>
